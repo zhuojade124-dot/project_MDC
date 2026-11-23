@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 dessin_process.py
 =================
@@ -22,13 +21,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
-
-# =====================================================================
-# PRIMITIVES DE DESSIN SUR TABLEAUX NUMPY
-# =====================================================================
-
-### Fonction `paint_disk` à compléter
-
 def paint_disk(bitmap, x, y, radius):
     """
     Peint un disque blanc centré en (x, y) dans bitmap.
@@ -43,40 +35,28 @@ def paint_disk(bitmap, x, y, radius):
     if arr.ndim != 2:
         raise ValueError("bitmap doit être un tableau 2D.")
 
-    r = int(round(y))
-    c = int(round(x))
+    r = float(y)
+    c = float(x)
     radius = max(float(radius), 0.0)
 
-    # Le disque ne rencontre pas l'image.
+    
     if r + radius < 0 or r - radius >= arr.shape[0]:
         return
     if c + radius < 0 or c - radius >= arr.shape[1]:
         return
 
-    # On ne construit le masque que dans la boîte entourant le disque.
     r0 = max(0, int(np.floor(r - radius)))
     r1 = min(arr.shape[0], int(np.ceil(r + radius)) + 1)
     c0 = max(0, int(np.floor(c - radius)))
     c1 = min(arr.shape[1], int(np.ceil(c + radius)) + 1)
 
-    # TODO
+    
+    rr, cc = np.ogrid[r0:r1, c0:c1]
 
-    # 1. Construire les coordonnées des pixels de la boîte.
-    #    Vous pouvez utiliser np.ogrid.
-    #
-    rr, cc = ...
+    mask = (rr - y)**2 + (cc - x)**2 <= radius**2
 
-    # 2. Construire un masque booléen correspondant aux pixels
-    #    situés dans le disque :
-    #
-    # (ligne - y)^2 + (colonne - x)^2 <= radius^2
-    #
-    mask = ...
-
-    # 3. Mettre les pixels correspondants à 1.
-    #
-    bitmap[...] = ...
-
+    region = arr[r0:r1, c0:c1]
+    region[mask] = 1
 
 #Complétez la fonction :
 
@@ -91,31 +71,15 @@ def paint_segment(bitmap, p0, p1, radius):
     x0, y0 = p0
     x1, y1 = p1
 
-    # TODO
+    distance = np.hypot(x1 - x0, y1 - y0)
+    step = max(0.5, float(radius) * 0.5)
+    n = max(2, int(np.ceil(distance / step)) + 1)
+    xs = np.linspace(x0, x1, n)
+    ys = np.linspace(y0, y1, n)
 
-    # 1. Calculer la distance entre p0 et p1.
-    #
-    distance = ...
-
-    # 2. Choisir la distance maximale entre deux centres
-    #    de disques successifs.
-    step = ...
-
-    # 3. Déterminer le nombre de points intermédiaires en utilisant ceil.
-    #
-    n = max(2, int(...))
-
-    # 4. Construire les coordonnées interpolées avec np.linspace.
-    #
-    xs = ...
-    ys = ...
-
-    # 5. Dessiner un disque en chacun de ces points.
-    #
     for x, y in zip(xs, ys):
-         paint_disk(...)
+        paint_disk(bitmap, x, y, radius)
 
-## Pour tester vos fonctions
 def test_paint_disk():
 
     bitmap = np.zeros((28, 28), dtype=float)
@@ -163,10 +127,7 @@ def test_paint_segment():
     plt.axis("off")
     plt.show()
 
-    
-# =====================================================================
-# RECENTRAGE ET CONVERSION DES DONNÉES QUICKDRAW
-# =====================================================================
+
 
 def compute_centering_parameters(width, height, size=28, margin=2):
     """
@@ -177,27 +138,23 @@ def compute_centering_parameters(width, height, size=28, margin=2):
         offx  : decalage horizontal
         offy  : decalage vertical
     """
-
-    # Eviter les divisions par zero
-
     # Longueur disponible entre les deux marges.
-    # Attention : les pixels sont indexes de 0 a size-1.
-    usable = ...  # TODO
+    usable = size - 1 - 2 * margin
 
     if usable <= 0:
         raise ValueError("Marge trop grande.")
 
-    # Choisir scale pour que :
     # max(width, height) * scale = usable
-    scale = ...   # TODO
+    longest = max(width, height)
+    scale = usable / longest if longest > 0 else 1.0
 
-    # Dimensions du dessin apres redimensionnement
-    scaled_width = ...   # TODO
-    scaled_height = ...  # TODO
+
+    scaled_width = width * scale
+    scaled_height = height * scale
 
     # Decalage = marge + moitie de l'espace libre
-    offx = ...    # TODO
-    offy = ...    # TODO
+    offx = margin + (usable - scaled_width) / 2
+    offy = margin + (usable - scaled_height) / 2
 
     return scale, offx, offy
 
@@ -227,9 +184,7 @@ def image_converter(strokes, size=28, margin=2, radius=1.0):
         255 = trait blanc.
     """
 
-    # -------------------------------------------------------------
     # 1. Rassembler tous les points du dessin
-    # -------------------------------------------------------------
     pts = []
     for stroke in strokes:
         xs, ys = stroke[0], stroke[1]
@@ -241,37 +196,27 @@ def image_converter(strokes, size=28, margin=2, radius=1.0):
     xs = np.array([p[0] for p in pts], dtype=float)
     ys = np.array([p[1] for p in pts], dtype=float)
 
-    # -------------------------------------------------------------
     # 2. Calculer la boîte englobante du dessin
-    # -------------------------------------------------------------
+
     xmin, xmax = xs.min(), xs.max()
     ymin, ymax = ys.min(), ys.max()
 
     width = max(xmax - xmin, 1.0)
     height = max(ymax - ymin, 1.0)
 
-    # -------------------------------------------------------------
     # 3. REDIMENSIONNER ET RECENTRER
-    # -------------------------------------------------------------
-    # On réutilisera cette fonction ensuite dans prepare_for_model(...)
-    # pour traiter un dessin réalisé à la souris ou chargé depuis un PNG.
+
     scale, offx, offy = compute_centering_parameters(
         width, height, size=size, margin=margin
     )
 
     bitmap = np.zeros((size, size), dtype=float)
-    # La transformation appliquée à chaque point est :
-    #
+  
     # x_final = offx + (x - xmin) * scale
     # y_final = offy + (y - ymin) * scale
-    #
-    # (x - xmin, y - ymin) ramène d'abord la boîte englobante à l'origine ;
-    # scale change sa taille ;
-    # offx et offy la placent au centre de l'image.
-
-    # -------------------------------------------------------------
+    
     # 4. Dessiner les traits dans l'image finale
-    # -------------------------------------------------------------
+
     for stroke in strokes:
         sx, sy = stroke[0], stroke[1]
 
@@ -284,21 +229,17 @@ def image_converter(strokes, size=28, margin=2, radius=1.0):
         ]
 
         if len(points) >= 2:
-            # Trait blanc 
             for p0, p1 in zip(points[:-1], points[1:]):
-                paint_segment(...)
+                paint_segment(bitmap, p0, p1, radius)
 
-        # Sinon on crée un petit disque autour de (x,y)
         elif len(points) == 1:
             # petit disque
-            paint_disk(...)
+            x, y = points[0]
+            paint_disk(bitmap, x, y, radius)
          
     return np.uint8(np.clip(bitmap, 0.0, 1.0) * 255)
 
     
-# =====================================================================
-# LECTURE / SAUVEGARDE DES DESSINS
-# =====================================================================
 
 def load_png_as_bitmap(path):
     """

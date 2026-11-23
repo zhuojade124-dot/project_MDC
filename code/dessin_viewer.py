@@ -100,12 +100,14 @@ class DrawingCanvas(QtWidgets.QWidget):
         point = (float(x), float(y))
 
         if self.last_point is None:
-            ...
+            # Premier point du trait : un disque.
+            paint_disk(self.array, x, y, self.brush)
 
         else:
-            ...
+            # Points suivants : relier au point précédent.
+            paint_segment(self.array, self.last_point, point, self.brush)
 
-        self.last_point = ...
+        self.last_point = point
 
         self.update()
         self.changed.emit()
@@ -361,7 +363,7 @@ def show_draw(
         %gui qt5
         pad = show_draw(...)
     """
-    get_qapp()
+    app = get_qapp()
 
     window = Draw(
         size=size,
@@ -369,6 +371,9 @@ def show_draw(
         classify_callback=classify_callback,
         title=title,
     )
+
+    # Garder l'application en mémoire tant que la fenêtre existe.
+    window.qapp = app
 
     window.show()
     window.raise_()
